@@ -6,6 +6,7 @@
 #include <vulkan/utility/vk_dispatch_table.h>
 #include <vulkan/vulkan.hpp>
 
+#include <atomic>
 #include <condition_variable>
 #include <deque>
 #include <memory>
@@ -109,6 +110,10 @@ class TimestampPool final {
 
       public:
         const std::uint32_t query_index;
+        // If a queue submit allocates a handle, but fails before this is set,
+        // then the reaper must skip await_end as the queries were reset but
+        // never written (avoiding a hang).
+        std::atomic<bool> was_submitted{false};
 
       public:
         Handle(TimestampPool& timestamp_pool, QueryChunk& query_chunk,

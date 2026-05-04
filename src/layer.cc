@@ -432,6 +432,7 @@ QueueSubmit(VkQueue queue, std::uint32_t submit_count,
     // We have to notify after we submit - otherwise we have a race where we
     // wait for work that wasn't submitted.
     for (auto&& [submit, handle] : std::views::zip(submit_span, handles)) {
+        handle->was_submitted.store(true, std::memory_order_relaxed);
         context->strategy->notify_submit(submit, std::move(handle));
     }
 
@@ -494,6 +495,7 @@ QueueSubmit2(VkQueue queue, std::uint32_t submit_count,
     }
 
     for (auto&& [submit, handle] : std::views::zip(submit_span, handles)) {
+        handle->was_submitted.store(true, std::memory_order_relaxed);
         context->strategy->notify_submit(submit, std::move(handle));
     }
 

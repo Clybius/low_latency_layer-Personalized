@@ -164,7 +164,10 @@ void TimestampPool::do_reaper(const std::stop_token stoken) {
 
         // Allow more to go on the queue while we wait for it to finish.
         lock.unlock();
-        handle_ptr->await_end();
+        // Only wait if the timestamp commands actually made it to the GPU.
+        if (handle_ptr->was_submitted.load(std::memory_order_relaxed)) {
+            handle_ptr->await_end();
+        }
 
         // Lock our mutex, allow the queue to use it again and delete it.
         lock.lock();
