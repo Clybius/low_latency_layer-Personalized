@@ -62,15 +62,16 @@ void DelayController::delay(const DeviceClock::duration& min_delay) {
 
     // Feed our gradient into ewma -> our gradient is noisy and an ewma smooths
     // it out into a readable signal.
-    constexpr auto ALPHA = 0.01;
+    constexpr auto ALPHA = 0.05;
     this->gradient_ewma =
         (ALPHA * gradient) + ((1.0 - ALPHA) * this->gradient_ewma);
 
     // Update drain - this should naturally center around 0.5 ewma.
     const auto delta = [&]() -> auto {
+        constexpr auto DELTA_GAIN = 5.0;
         const auto ns = this->previous_frame->jitter.count();
         const auto dt = (0.5 - this->gradient_ewma) * static_cast<double>(ns);
-        return DeviceClock::duration{static_cast<long long>(dt)};
+        return DeviceClock::duration{static_cast<long long>(DELTA_GAIN * dt)};
     }();
     this->drain = std::clamp(this->drain + delta, 0ns, frametime);
 
