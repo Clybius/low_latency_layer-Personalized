@@ -40,12 +40,18 @@ class DelayController {
     static constexpr double EWMA_DRAIN_OFF = 0.75;
 
     struct frame_info {
-        // The time after min_delay, before jitter and drain is applied.
-        DeviceClock::time_point::duration frametime;
-        DeviceClock::time_point::duration jitter;
-        DeviceClock::time_point::duration drain;
-        // The time after min
-        DeviceClock::time_point release;
+        // The distance between the previous frame's release and when we entered
+        // delay(). Doesn't include min_delay, jitter, drain or frametime.
+        DeviceClock::time_point::duration frametime{};
+
+        // Delay imposed to drain the simulation queue.
+        DeviceClock::time_point::duration drain{};
+
+        // Jitter to detect if we're at the bottom of the simulation queue.
+        DeviceClock::time_point::duration jitter{};
+
+        // When delay() released the frame.
+        DeviceClock::time_point release{};
     };
     std::optional<frame_info> previous_frame;
 
