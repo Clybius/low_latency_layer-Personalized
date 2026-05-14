@@ -13,14 +13,14 @@ class QueueContext;
 
 class AntiLagQueueStrategy final : public QueueStrategy {
   private:
-    const VkQueueFlags queue_flags; // Retrieved from our PhysicalDevice.
+    const VkQueueFlags queue_flags{}; // Retrieved from our PhysicalDevice.
 
   public:
-    std::mutex mutex;
-    std::unique_ptr<FrameSpan> frame_span; // Null represents no work.
+    std::mutex mutex{};
+    std::unique_ptr<FrameSpan> frame_span{}; // Null represents no work.
 
   public:
-    AntiLagQueueStrategy(QueueContext& queue);
+    explicit AntiLagQueueStrategy(QueueContext& queue);
     virtual ~AntiLagQueueStrategy();
 
   public:

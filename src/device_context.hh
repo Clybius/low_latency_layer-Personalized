@@ -25,20 +25,21 @@ class DeviceContext final : public Context {
     PhysicalDeviceContext& physical_device;
     // Whether or not we were asked to do NV_VK_LowLatency2 or VK_AMD_anti_lag
     // at the device level.
-    const bool was_capability_requested;
-    const VkDevice device;
-    const VkuDeviceDispatchTable vtable;
+    const bool was_capability_requested{};
+    const VkDevice device{};
+    const VkuDeviceDispatchTable vtable{};
 
-    std::shared_mutex mutex;
-    std::unique_ptr<DeviceClock> clock;
-    std::unordered_map<VkQueue, std::shared_ptr<QueueContext>> queues;
-    std::unique_ptr<DeviceStrategy> strategy;
+    std::shared_mutex mutex{};
+    std::unique_ptr<DeviceClock> clock{};
+    std::unordered_map<VkQueue, std::shared_ptr<QueueContext>> queues{};
+    std::unique_ptr<DeviceStrategy> strategy{};
 
   public:
-    DeviceContext(InstanceContext& parent_instance,
-                  PhysicalDeviceContext& parent_physical,
-                  const VkDevice& device, const bool was_capability_requested,
-                  VkuDeviceDispatchTable&& vtable);
+    explicit DeviceContext(InstanceContext& parent_instance,
+                           PhysicalDeviceContext& parent_physical,
+                           const VkDevice& device,
+                           const bool was_capability_requested,
+                           VkuDeviceDispatchTable&& vtable);
     virtual ~DeviceContext();
 };
 

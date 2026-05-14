@@ -54,10 +54,10 @@ class TimestampPool final {
         struct QueryPoolOwner final {
           private:
             const QueueContext& queue_context;
-            VkQueryPool query_pool;
+            VkQueryPool query_pool{};
 
           public:
-            QueryPoolOwner(const QueueContext& queue_context);
+            explicit QueryPoolOwner(const QueueContext& queue_context);
             QueryPoolOwner(const QueryPoolOwner&) = delete;
             QueryPoolOwner(QueryPoolOwner&&) = delete;
             QueryPoolOwner& operator=(const QueryPoolOwner&) = delete;
@@ -71,10 +71,10 @@ class TimestampPool final {
         struct CommandBuffersOwner final {
           public:
             const QueueContext& queue_context;
-            std::vector<VkCommandBuffer> command_buffers;
+            std::vector<VkCommandBuffer> command_buffers{};
 
           public:
-            CommandBuffersOwner(const QueueContext& queue_context);
+            explicit CommandBuffersOwner(const QueueContext& queue_context);
             CommandBuffersOwner(const CommandBuffersOwner&) = delete;
             CommandBuffersOwner(CommandBuffersOwner&&) = delete;
             CommandBuffersOwner& operator=(const CommandBuffersOwner&) = delete;
@@ -82,13 +82,13 @@ class TimestampPool final {
             ~CommandBuffersOwner();
         };
 
-        std::unique_ptr<QueryPoolOwner> query_pool;
-        std::unique_ptr<CommandBuffersOwner> command_buffers;
+        std::unique_ptr<QueryPoolOwner> query_pool{};
+        std::unique_ptr<CommandBuffersOwner> command_buffers{};
         // A set of indices which are currently availabe in this chunk.
-        std::unordered_set<std::uint32_t> free_indices;
+        std::unordered_set<std::uint32_t> free_indices{};
 
       public:
-        QueryChunk(const QueueContext& queue_context);
+        explicit QueryChunk(const QueueContext& queue_context);
         QueryChunk(const QueryChunk& handle) = delete;
         QueryChunk(QueryChunk&&) = delete;
         QueryChunk& operator=(const QueryChunk& handle) = delete;
@@ -111,15 +111,15 @@ class TimestampPool final {
         QueryChunk& query_chunk;
 
       public:
-        const std::uint32_t query_index;
+        const std::uint32_t query_index{};
         // If a queue submit allocates a handle, but fails before this is set,
         // then the reaper must skip await_end as the queries were reset but
         // never written (avoiding a hang).
         std::atomic<bool> was_submitted{false};
 
       public:
-        Handle(TimestampPool& timestamp_pool, QueryChunk& query_chunk,
-               const std::uint32_t query_index);
+        explicit Handle(TimestampPool& timestamp_pool, QueryChunk& query_chunk,
+                        const std::uint32_t query_index);
         Handle(const Handle& handle) = delete;
         Handle(Handle&&) = delete;
         Handle& operator=(Handle&&) = delete;
@@ -153,16 +153,16 @@ class TimestampPool final {
     void do_reaper(const std::stop_token stoken);
 
   private:
-    std::deque<Handle*> expiring_handles;
-    std::unordered_set<std::unique_ptr<QueryChunk>> query_chunks;
+    std::mutex mutex{};
+    std::condition_variable_any cv{};
 
-    std::mutex mutex;
-    std::condition_variable_any cv;
+    std::deque<Handle*> expiring_handles{};
+    std::unordered_set<std::unique_ptr<QueryChunk>> query_chunks{};
 
-    std::jthread reaper_worker;
+    std::jthread reaper_worker{};
 
   public:
-    TimestampPool(QueueContext& queue_context);
+    explicit TimestampPool(QueueContext& queue_context);
     TimestampPool(const TimestampPool&) = delete;
     TimestampPool(TimestampPool&&) = delete;
     TimestampPool& operator=(const TimestampPool&) = delete;

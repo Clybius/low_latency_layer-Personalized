@@ -22,7 +22,7 @@ class SwapchainMonitor final {
   private:
     std::vector<std::unique_ptr<FrameSpan>> pending_frame_spans{};
 
-    struct PendingSignal {
+    struct PendingSignal final {
         SemaphoreSignal semaphore_signal;
         std::vector<std::unique_ptr<FrameSpan>> frame_spans{};
     };
@@ -43,7 +43,7 @@ class SwapchainMonitor final {
     void do_monitor(const std::stop_token stoken);
 
   public:
-    SwapchainMonitor(const DeviceContext& device);
+    explicit SwapchainMonitor(const DeviceContext& device);
     SwapchainMonitor(const SwapchainMonitor&) = delete;
     SwapchainMonitor(SwapchainMonitor&&) = delete;
     SwapchainMonitor& operator=(const SwapchainMonitor&) = delete;

@@ -20,16 +20,16 @@ class QueueContext final : public Context {
   public:
     DeviceContext& device;
 
-    const VkQueue queue;
-    const std::uint32_t queue_family_index;
+    const VkQueue queue{};
+    const std::uint32_t queue_family_index{};
 
     struct CommandPoolOwner final {
       private:
         const QueueContext& queue;
-        VkCommandPool command_pool;
+        VkCommandPool command_pool{};
 
       public:
-        CommandPoolOwner(const QueueContext& queue);
+        explicit CommandPoolOwner(const QueueContext& queue);
         CommandPoolOwner(const CommandPoolOwner&) = delete;
         CommandPoolOwner(CommandPoolOwner&&) = delete;
         CommandPoolOwner& operator=(const CommandPoolOwner&) = delete;
@@ -40,13 +40,13 @@ class QueueContext final : public Context {
         operator const VkCommandPool&() const { return this->command_pool; }
     };
 
-    std::unique_ptr<CommandPoolOwner> command_pool;
-    std::unique_ptr<TimestampPool> timestamp_pool;
-    std::unique_ptr<QueueStrategy> strategy;
+    std::unique_ptr<CommandPoolOwner> command_pool{};
+    std::unique_ptr<TimestampPool> timestamp_pool{};
+    std::unique_ptr<QueueStrategy> strategy{};
 
   public:
-    QueueContext(DeviceContext& device_context, const VkQueue& queue,
-                 const std::uint32_t& queue_family_index);
+    explicit QueueContext(DeviceContext& device_context, const VkQueue& queue,
+                          const std::uint32_t& queue_family_index);
     virtual ~QueueContext();
 
   public:

@@ -23,7 +23,7 @@ class AntiLagDeviceStrategy final : public DeviceStrategy {
     DelayController delay_controller{};
 
   public:
-    AntiLagDeviceStrategy(DeviceContext& device);
+    explicit AntiLagDeviceStrategy(DeviceContext& device);
     virtual ~AntiLagDeviceStrategy();
 
   public:

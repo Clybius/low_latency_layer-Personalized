@@ -22,17 +22,17 @@ class PhysicalDeviceContext final : public Context {
 
   public:
     InstanceContext& instance;
-    const VkPhysicalDevice physical_device;
+    const VkPhysicalDevice physical_device{};
 
-    std::unique_ptr<VkPhysicalDeviceProperties> properties;
-    std::unique_ptr<std::vector<VkQueueFamilyProperties2>> queue_properties;
+    std::unique_ptr<VkPhysicalDeviceProperties> properties{};
+    std::unique_ptr<std::vector<VkQueueFamilyProperties2>> queue_properties{};
 
     // Will be true if the physical device supports all of required_extensions.
-    bool supports_required_extensions = false;
+    bool supports_required_extensions{false};
 
   public:
-    PhysicalDeviceContext(InstanceContext& instance_context,
-                          const VkPhysicalDevice& physical_device);
+    explicit PhysicalDeviceContext(InstanceContext& instance_context,
+                                   const VkPhysicalDevice& physical_device);
     virtual ~PhysicalDeviceContext();
 };
 

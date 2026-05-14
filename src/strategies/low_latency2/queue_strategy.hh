@@ -30,7 +30,7 @@ class LowLatency2QueueStrategy final : public QueueStrategy {
     std::atomic<bool> is_out_of_band{}; // atomic to avoid lock
 
   public:
-    LowLatency2QueueStrategy(QueueContext& queue);
+    explicit LowLatency2QueueStrategy(QueueContext& queue);
     virtual ~LowLatency2QueueStrategy();
 
   public:

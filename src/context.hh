@@ -7,7 +7,7 @@ namespace low_latency {
 // handles of Vulkan objects in a single map.
 class Context {
   public:
-    Context();
+    explicit Context();
     Context(const Context& context) = delete;
     Context(Context&& context) = delete;
     Context& operator=(const Context& context) = delete;

@@ -14,12 +14,11 @@ class DeviceContext;
 
 class LowLatency2DeviceStrategy final : public DeviceStrategy {
   private:
-    std::shared_mutex mutex;
-    // swapchain -> swapchain monitor
-    std::unordered_map<VkSwapchainKHR, SwapchainMonitor> swapchain_monitors;
+    std::shared_mutex mutex{};
+    std::unordered_map<VkSwapchainKHR, SwapchainMonitor> swapchain_monitors{};
 
   public:
-    LowLatency2DeviceStrategy(DeviceContext& device);
+    explicit LowLatency2DeviceStrategy(DeviceContext& device);
     virtual ~LowLatency2DeviceStrategy();
 
   public:

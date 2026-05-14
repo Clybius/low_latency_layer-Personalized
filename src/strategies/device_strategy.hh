@@ -13,7 +13,7 @@ class DeviceStrategy {
     DeviceContext& device;
 
   public:
-    DeviceStrategy(DeviceContext& device);
+    explicit DeviceStrategy(DeviceContext& device);
     virtual ~DeviceStrategy();
 
   public:

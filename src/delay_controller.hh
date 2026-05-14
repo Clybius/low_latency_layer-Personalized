@@ -38,24 +38,24 @@ namespace low_latency {
 // 'are we there'.
 class DelayController {
   private:
-    struct frame_info {
+    struct frame_info final {
         // The distance between the previous frame's release and when we entered
         // delay(). Doesn't include min_delay, jitter, drain or frametime.
-        DeviceClock::time_point::duration frametime{};
+        const DeviceClock::time_point::duration frametime{};
 
         // Jitter to detect if we're at the bottom of the simulation queue.
-        DeviceClock::time_point::duration jitter{};
+        const DeviceClock::time_point::duration jitter{};
 
         // When delay() released the frame.
-        DeviceClock::time_point release{};
+        const DeviceClock::time_point release{};
     };
-    std::optional<frame_info> previous_frame;
+    std::optional<frame_info> previous_frame{};
 
     double gradient_ewma{};
     DeviceClock::duration drain{};
 
   public:
-    DelayController();
+    explicit DelayController();
     DelayController(const DelayController&) = delete;
     DelayController(DelayController&&) = delete;
     DelayController& operator=(const DelayController&) = delete;

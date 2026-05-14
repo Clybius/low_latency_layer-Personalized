@@ -25,6 +25,8 @@ class DeviceClock final {
     using time_point = std::chrono::time_point<DeviceClock>;
     static constexpr bool is_steady = true;
 
+  private:
+    static constexpr auto CALIBRATION_PERIOD = std::chrono::seconds{1};
     const DeviceContext& device;
 
   private:
@@ -32,14 +34,11 @@ class DeviceClock final {
     void do_calibration(const std::stop_token stoken);
 
   private:
-    std::condition_variable_any cv{};
     std::shared_mutex mutex{};
+    std::condition_variable_any cv{};
     std::uint64_t host_ns{};
     std::uint64_t error_bound{};
     std::uint64_t device_ticks{};
-
-    // Every so often we recalibrate the clock on another thread.
-    static constexpr auto CALIBRATION_PERIOD = std::chrono::seconds{1};
     std::jthread calibration_thread{};
 
   public:

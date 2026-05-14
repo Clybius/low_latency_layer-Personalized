@@ -14,7 +14,7 @@ class QueueStrategy {
     QueueContext& queue;
 
   public:
-    QueueStrategy(QueueContext& queue);
+    explicit QueueStrategy(QueueContext& queue);
     virtual ~QueueStrategy();
 
   public:

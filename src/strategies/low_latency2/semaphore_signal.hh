@@ -23,13 +23,14 @@
 
 namespace low_latency {
 
-class SemaphoreSignal {
+class SemaphoreSignal final {
   private:
     const VkSemaphore semaphore{};
     const std::uint64_t value{};
 
   public:
-    SemaphoreSignal(const VkSemaphore& semaphore, const std::uint64_t& value);
+    explicit SemaphoreSignal(const VkSemaphore& semaphore,
+                             const std::uint64_t& value);
     ~SemaphoreSignal();
 
   public:

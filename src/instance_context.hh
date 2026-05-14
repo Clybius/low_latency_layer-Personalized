@@ -17,16 +17,16 @@ struct InstanceContext final : public Context {
 
     const LayerContext& layer;
 
-    const VkInstance instance;
-    const VkuInstanceDispatchTable vtable;
+    const VkInstance instance{};
+    const VkuInstanceDispatchTable vtable{};
 
     std::unordered_map<void*, std::shared_ptr<PhysicalDeviceContext>>
-        physical_devices;
+        physical_devices{};
 
   public:
-    InstanceContext(const LayerContext& parent_context,
-                    const VkInstance& instance,
-                    VkuInstanceDispatchTable&& vtable);
+    explicit InstanceContext(const LayerContext& parent_context,
+                             const VkInstance& instance,
+                             VkuInstanceDispatchTable&& vtable);
     virtual ~InstanceContext();
 };
 

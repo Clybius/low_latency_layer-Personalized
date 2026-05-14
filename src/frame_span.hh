@@ -14,11 +14,11 @@ namespace low_latency {
 // only a single submission for that queue.
 class FrameSpan {
   public:
-    const std::shared_ptr<TimestampPool::Handle> head_handle;
-    std::shared_ptr<TimestampPool::Handle> tail_handle;
+    const std::shared_ptr<TimestampPool::Handle> head_handle{};
+    std::shared_ptr<TimestampPool::Handle> tail_handle{};
 
   public:
-    FrameSpan(std::shared_ptr<TimestampPool::Handle> handle);
+    explicit FrameSpan(std::shared_ptr<TimestampPool::Handle> handle);
     FrameSpan(const FrameSpan&) = delete;
     FrameSpan(FrameSpan&&) = delete;
     FrameSpan& operator=(const FrameSpan&) = delete;
