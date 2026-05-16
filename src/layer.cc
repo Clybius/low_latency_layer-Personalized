@@ -480,7 +480,9 @@ QueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* present_info) {
 
     // We must *ALWAYS* notify_present regardless of the error here.
     assert(present_info);
-    context->strategy->notify_present(*present_info);
+    if (context->strategy) {
+        context->strategy->notify_present(*present_info);
+    }
 
     return result;
 }
@@ -717,7 +719,7 @@ static VKAPI_ATTR VkResult VKAPI_CALL CreateSwapchainKHR(
         return result;
     }
 
-    if (context->was_layer_enabled) {
+    if (context->strategy) {
         assert(pCreateInfo);
         context->strategy->notify_create_swapchain(*pSwapchain, *pCreateInfo);
     }
@@ -730,7 +732,7 @@ DestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain,
                     const VkAllocationCallbacks* pAllocator) {
     const auto context = layer_context.get_context(device);
 
-    if (context->was_layer_enabled) {
+    if (context->strategy) {
         context->strategy->notify_destroy_swapchain(swapchain);
     }
 
