@@ -12,14 +12,14 @@ namespace low_latency {
 DeviceContext::DeviceContext(InstanceContext& parent_instance,
                              PhysicalDeviceContext& parent_physical_device,
                              const VkDevice& device,
-                             const bool was_capability_requested,
+                             const bool was_layer_enabled,
                              VkuDeviceDispatchTable&& vtable)
     : instance(parent_instance), physical_device(parent_physical_device),
-      was_capability_requested(was_capability_requested), device(device),
+      was_layer_enabled(was_layer_enabled), device(device),
       vtable(std::move(vtable)) {
 
     // Only create our clock if we were asked to do anything.
-    if (!this->was_capability_requested) {
+    if (!this->was_layer_enabled) {
         return;
     }
 

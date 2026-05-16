@@ -151,13 +151,13 @@ static VKAPI_ATTR VkResult VKAPI_CALL CreateDevice(
     const auto requested = std::unordered_set<std::string_view>(
         std::from_range, enabled_extensions);
 
-    const auto was_capability_requested =
+    const auto was_layer_enabled =
         requested.contains(!layer_context.should_expose_reflex
                                ? VK_AMD_ANTI_LAG_EXTENSION_NAME
                                : VK_NV_LOW_LATENCY_2_EXTENSION_NAME);
 
     const auto context = layer_context.get_context(physical_device);
-    if (was_capability_requested && !context->supports_required_extensions) {
+    if (was_layer_enabled && !context->supports_required_extensions) {
         return VK_ERROR_INITIALIZATION_FAILED;
     }
 
@@ -172,22 +172,21 @@ static VKAPI_ATTR VkResult VKAPI_CALL CreateDevice(
     if (!gdpa || !gipa) {
         return VK_ERROR_INITIALIZATION_FAILED;
     }
+
     const_cast<VkLayerDeviceCreateInfo*>(create_info)->u.pLayerInfo =
         create_info->u.pLayerInfo->pNext;
 
     // Build a next extensions vector from what they have requested.
     const auto next_extensions = [&]() -> std::vector<const char*> {
-        auto next_extensions = std::vector(std::from_range, enabled_extensions);
-
-        if (!was_capability_requested) {
-            return next_extensions;
-        }
+        auto next_extensions = std::vector{std::from_range, enabled_extensions};
 
         // Only append the extra extension if it wasn't already asked for.
-        for (const auto& wanted : PhysicalDeviceContext::required_extensions) {
-            if (!requested.contains(wanted)) {
-                next_extensions.push_back(wanted);
-            }
+        if (was_layer_enabled) {
+            std::ranges::copy_if(PhysicalDeviceContext::required_extensions,
+                                 std::back_inserter(next_extensions),
+                                 [&requested](const auto& wanted) {
+                                     return !requested.contains(wanted);
+                                 });
         }
 
         return next_extensions;
@@ -219,12 +218,11 @@ static VKAPI_ATTR VkResult VKAPI_CALL CreateDevice(
 
     const auto key = layer_context.get_key(*pDevice);
     const auto lock = std::scoped_lock{layer_context.mutex};
-
     assert(!layer_context.contexts.contains(key));
     layer_context.contexts.try_emplace(
-        key, std::make_shared<DeviceContext>(context->instance, *context,
-                                             *pDevice, was_capability_requested,
-                                             std::move(vtable)));
+        key,
+        std::make_shared<DeviceContext>(context->instance, *context, *pDevice,
+                                        was_layer_enabled, std::move(vtable)));
 
     return VK_SUCCESS;
 }
@@ -719,7 +717,7 @@ static VKAPI_ATTR VkResult VKAPI_CALL CreateSwapchainKHR(
         return result;
     }
 
-    if (context->was_capability_requested) {
+    if (context->was_layer_enabled) {
         assert(pCreateInfo);
         context->strategy->notify_create_swapchain(*pSwapchain, *pCreateInfo);
     }
@@ -732,7 +730,7 @@ DestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain,
                     const VkAllocationCallbacks* pAllocator) {
     const auto context = layer_context.get_context(device);
 
-    if (context->was_capability_requested) {
+    if (context->was_layer_enabled) {
         context->strategy->notify_destroy_swapchain(swapchain);
     }
 

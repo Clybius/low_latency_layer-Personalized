@@ -65,7 +65,7 @@ bool QueueContext::should_inject_timestamps() const {
 
     // Don't bother injecting timestamps during queue submission if we
     // aren't planning on doing anything anyway.
-    if (!this->device.was_capability_requested) {
+    if (!this->device.was_layer_enabled) {
         return false;
     }
 
