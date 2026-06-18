@@ -8,11 +8,11 @@
 
 extern "C" {
 
-VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL
-LowLatency_GetInstanceProcAddr(VkInstance instance, const char* const pname);
+VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL LowLatency_GetInstanceProcAddr(
+    VkInstance instance, const char* const pname) noexcept;
 
 VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL
-LowLatency_GetDeviceProcAddr(VkDevice device, const char* pName);
+LowLatency_GetDeviceProcAddr(VkDevice device, const char* pName) noexcept;
 }
 
 namespace low_latency {

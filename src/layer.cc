@@ -35,9 +35,9 @@ LayerContext layer_context;
 
 } // namespace
 
-static VKAPI_ATTR VkResult VKAPI_CALL
-CreateInstance(const VkInstanceCreateInfo* pCreateInfo,
-               const VkAllocationCallbacks* pAllocator, VkInstance* pInstance) {
+static VKAPI_ATTR VkResult VKAPI_CALL CreateInstance(
+    const VkInstanceCreateInfo* pCreateInfo,
+    const VkAllocationCallbacks* pAllocator, VkInstance* pInstance) noexcept {
 
     const auto link_info = [&]() -> auto {
         for (auto i = static_cast<const VkBaseInStructure*>(pCreateInfo->pNext);
@@ -97,8 +97,8 @@ CreateInstance(const VkInstanceCreateInfo* pCreateInfo,
     return VK_SUCCESS;
 }
 
-static VKAPI_ATTR void VKAPI_CALL
-DestroyInstance(VkInstance instance, const VkAllocationCallbacks* allocator) {
+static VKAPI_ATTR void VKAPI_CALL DestroyInstance(
+    VkInstance instance, const VkAllocationCallbacks* allocator) noexcept {
     // These requires special care because multiple threads might create a race
     // condition by being given the same VkInstance dispatchable handle.
     const auto destroy_instance = [&]() {
@@ -126,9 +126,9 @@ DestroyInstance(VkInstance instance, const VkAllocationCallbacks* allocator) {
     destroy_instance(instance, allocator);
 }
 
-static VKAPI_ATTR VkResult VKAPI_CALL EnumeratePhysicalDevices(
-    VkInstance instance, std::uint32_t* count, VkPhysicalDevice* devices) {
-
+static VKAPI_ATTR VkResult VKAPI_CALL
+EnumeratePhysicalDevices(VkInstance instance, std::uint32_t* count,
+                         VkPhysicalDevice* devices) noexcept {
     const auto context = layer_context.get_context(instance);
 
     if (const auto result =
@@ -158,7 +158,7 @@ static VKAPI_ATTR VkResult VKAPI_CALL EnumeratePhysicalDevices(
 
 static VKAPI_ATTR VkResult VKAPI_CALL CreateDevice(
     VkPhysicalDevice physical_device, const VkDeviceCreateInfo* pCreateInfo,
-    const VkAllocationCallbacks* pAllocator, VkDevice* pDevice) {
+    const VkAllocationCallbacks* pAllocator, VkDevice* pDevice) noexcept {
 
     const auto enabled_extensions =
         std::span{pCreateInfo->ppEnabledExtensionNames,
@@ -312,8 +312,8 @@ static VKAPI_ATTR VkResult VKAPI_CALL CreateDevice(
     return VK_SUCCESS;
 }
 
-static VKAPI_ATTR void VKAPI_CALL
-DestroyDevice(VkDevice device, const VkAllocationCallbacks* allocator) {
+static VKAPI_ATTR void VKAPI_CALL DestroyDevice(
+    VkDevice device, const VkAllocationCallbacks* allocator) noexcept {
     // Similarly to DestroyInstance, this needs to be done carefully to avoid a
     // race.
     const auto destroy_device = [&]() -> auto {
@@ -342,8 +342,7 @@ DestroyDevice(VkDevice device, const VkAllocationCallbacks* allocator) {
 
 static VKAPI_ATTR void VKAPI_CALL
 GetDeviceQueue(VkDevice device, std::uint32_t queue_family_index,
-               std::uint32_t queue_index, VkQueue* queue) {
-
+               std::uint32_t queue_index, VkQueue* queue) noexcept {
     const auto context = layer_context.get_context(device);
 
     // Get device queue, unlike CreateDevice or CreateInstance, can be
@@ -375,7 +374,7 @@ GetDeviceQueue(VkDevice device, std::uint32_t queue_family_index,
 
 // Identical logic to gdq1.
 static VKAPI_ATTR void VKAPI_CALL GetDeviceQueue2(
-    VkDevice device, const VkDeviceQueueInfo2* info, VkQueue* queue) {
+    VkDevice device, const VkDeviceQueueInfo2* info, VkQueue* queue) noexcept {
 
     const auto context = layer_context.get_context(device);
 
@@ -400,8 +399,7 @@ static VKAPI_ATTR void VKAPI_CALL GetDeviceQueue2(
 
 static VKAPI_ATTR VkResult VKAPI_CALL
 QueueSubmit(VkQueue queue, std::uint32_t submit_count,
-            const VkSubmitInfo* submit_infos, VkFence fence) {
-
+            const VkSubmitInfo* submit_infos, VkFence fence) noexcept {
     const auto context = layer_context.get_context(queue);
     const auto& vtable = context->device.vtable;
 
@@ -469,8 +467,7 @@ QueueSubmit(VkQueue queue, std::uint32_t submit_count,
 static VKAPI_ATTR VkResult VKAPI_CALL
 QueueSubmit2Impl(VkQueue queue, std::uint32_t submit_count,
                  const VkSubmitInfo2* submit_infos, VkFence fence,
-                 const bool should_use_khr) {
-
+                 const bool should_use_khr) noexcept {
     const auto context = layer_context.get_context(queue);
     const auto& vtable = context->device.vtable;
     const auto& queue_submit_func =
@@ -533,19 +530,18 @@ QueueSubmit2Impl(VkQueue queue, std::uint32_t submit_count,
 
 static VKAPI_ATTR VkResult VKAPI_CALL
 QueueSubmit2(VkQueue queue, std::uint32_t submit_count,
-             const VkSubmitInfo2* submit_info, VkFence fence) {
+             const VkSubmitInfo2* submit_info, VkFence fence) noexcept {
     return QueueSubmit2Impl(queue, submit_count, submit_info, fence, false);
 }
 
 static VKAPI_ATTR VkResult VKAPI_CALL
 QueueSubmit2KHR(VkQueue queue, std::uint32_t submit_count,
-                const VkSubmitInfo2* submit_info, VkFence fence) {
+                const VkSubmitInfo2* submit_info, VkFence fence) noexcept {
     return QueueSubmit2Impl(queue, submit_count, submit_info, fence, true);
 }
 
 static VKAPI_ATTR VkResult VKAPI_CALL
-QueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* present_info) {
-
+QueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* present_info) noexcept {
     const auto context = layer_context.get_context(queue);
     const auto& vtable = context->device.vtable;
 
@@ -562,7 +558,8 @@ QueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* present_info) {
 
 static VKAPI_ATTR VkResult VKAPI_CALL EnumerateDeviceExtensionProperties(
     VkPhysicalDevice physical_device, const char* pLayerName,
-    std::uint32_t* pPropertyCount, VkExtensionProperties* pProperties) {
+    std::uint32_t* pPropertyCount,
+    VkExtensionProperties* pProperties) noexcept {
 
     const auto context = layer_context.get_context(physical_device);
     const auto& vtable = context->instance.vtable;
@@ -655,7 +652,7 @@ static VKAPI_ATTR VkResult VKAPI_CALL EnumerateDeviceExtensionProperties(
 
 static VKAPI_ATTR void VKAPI_CALL GetPhysicalDeviceFeatures2Impl(
     VkPhysicalDevice physical_device, VkPhysicalDeviceFeatures2* pFeatures,
-    const bool should_use_khr) {
+    const bool should_use_khr) noexcept {
 
     const auto context = layer_context.get_context(physical_device);
     const auto& vtable = context->instance.vtable;
@@ -682,20 +679,23 @@ static VKAPI_ATTR void VKAPI_CALL GetPhysicalDeviceFeatures2Impl(
     }
 }
 
-static VKAPI_ATTR void VKAPI_CALL GetPhysicalDeviceFeatures2(
-    VkPhysicalDevice physical_device, VkPhysicalDeviceFeatures2* pFeatures) {
+static VKAPI_ATTR void VKAPI_CALL
+GetPhysicalDeviceFeatures2(VkPhysicalDevice physical_device,
+                           VkPhysicalDeviceFeatures2* pFeatures) noexcept {
 
     GetPhysicalDeviceFeatures2Impl(physical_device, pFeatures, false);
 }
 
 static VKAPI_ATTR void VKAPI_CALL GetPhysicalDeviceFeatures2KHR(
-    VkPhysicalDevice physical_device, VkPhysicalDeviceFeatures2KHR* pFeatures) {
+    VkPhysicalDevice physical_device,
+    VkPhysicalDeviceFeatures2KHR* pFeatures) noexcept {
 
     GetPhysicalDeviceFeatures2Impl(physical_device, pFeatures, true);
 }
 
-static VKAPI_ATTR void VKAPI_CALL GetPhysicalDeviceProperties(
-    VkPhysicalDevice physical_device, VkPhysicalDeviceProperties* pProperties) {
+static VKAPI_ATTR void VKAPI_CALL
+GetPhysicalDeviceProperties(VkPhysicalDevice physical_device,
+                            VkPhysicalDeviceProperties* pProperties) noexcept {
 
     const auto context = layer_context.get_context(physical_device);
     const auto& vtable = context->instance.vtable;
@@ -715,7 +715,7 @@ static VKAPI_ATTR void VKAPI_CALL GetPhysicalDeviceProperties(
 
 static VKAPI_ATTR void VKAPI_CALL GetPhysicalDeviceProperties2Impl(
     VkPhysicalDevice physical_device, VkPhysicalDeviceProperties2* pProperties,
-    const bool should_use_khr) {
+    const bool should_use_khr) noexcept {
 
     const auto context = layer_context.get_context(physical_device);
     const auto& vtable = context->instance.vtable;
@@ -736,22 +736,24 @@ static VKAPI_ATTR void VKAPI_CALL GetPhysicalDeviceProperties2Impl(
 }
 
 // Identical logic to GetPhysicalDeviceProperties.
-static VKAPI_ATTR void VKAPI_CALL
-GetPhysicalDeviceProperties2(VkPhysicalDevice physical_device,
-                             VkPhysicalDeviceProperties2* pProperties) {
+static VKAPI_ATTR void VKAPI_CALL GetPhysicalDeviceProperties2(
+    VkPhysicalDevice physical_device,
+    VkPhysicalDeviceProperties2* pProperties) noexcept {
+
     GetPhysicalDeviceProperties2Impl(physical_device, pProperties, false);
 }
 
-static VKAPI_ATTR void VKAPI_CALL
-GetPhysicalDeviceProperties2KHR(VkPhysicalDevice physical_device,
-                                VkPhysicalDeviceProperties2* pProperties) {
+static VKAPI_ATTR void VKAPI_CALL GetPhysicalDeviceProperties2KHR(
+    VkPhysicalDevice physical_device,
+    VkPhysicalDeviceProperties2* pProperties) noexcept {
+
     GetPhysicalDeviceProperties2Impl(physical_device, pProperties, true);
 }
 
 static VKAPI_ATTR VkResult VKAPI_CALL GetPhysicalDeviceSurfaceCapabilities2KHR(
     VkPhysicalDevice physical_device,
     const VkPhysicalDeviceSurfaceInfo2KHR* pSurfaceInfo,
-    VkSurfaceCapabilities2KHR* pSurfaceCapabilities) {
+    VkSurfaceCapabilities2KHR* pSurfaceCapabilities) noexcept {
 
     const auto context = layer_context.get_context(physical_device);
     const auto& vtable = context->instance.vtable;
@@ -801,12 +803,11 @@ static VKAPI_ATTR VkResult VKAPI_CALL GetPhysicalDeviceSurfaceCapabilities2KHR(
     return VK_SUCCESS;
 }
 
-static VKAPI_ATTR VkResult VKAPI_CALL CreateSwapchainKHR(
-    VkDevice device, const VkSwapchainCreateInfoKHR* pCreateInfo,
-    const VkAllocationCallbacks* pAllocator, VkSwapchainKHR* pSwapchain) {
-
+static VKAPI_ATTR VkResult VKAPI_CALL
+CreateSwapchainKHR(VkDevice device, const VkSwapchainCreateInfoKHR* pCreateInfo,
+                   const VkAllocationCallbacks* pAllocator,
+                   VkSwapchainKHR* pSwapchain) noexcept {
     const auto context = layer_context.get_context(device);
-
     if (const auto result = context->vtable.CreateSwapchainKHR(
             device, pCreateInfo, pAllocator, pSwapchain);
         result != VK_SUCCESS) {
@@ -824,18 +825,17 @@ static VKAPI_ATTR VkResult VKAPI_CALL CreateSwapchainKHR(
 
 static VKAPI_ATTR void VKAPI_CALL
 DestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain,
-                    const VkAllocationCallbacks* pAllocator) {
+                    const VkAllocationCallbacks* pAllocator) noexcept {
     const auto context = layer_context.get_context(device);
-
     if (context->strategy) {
         context->strategy->notify_destroy_swapchain(swapchain);
     }
-
     context->vtable.DestroySwapchainKHR(device, swapchain, pAllocator);
 }
 
 static VKAPI_ATTR void VKAPI_CALL
-AntiLagUpdateAMD(VkDevice device, const VkAntiLagDataAMD* pData) {
+AntiLagUpdateAMD(VkDevice device, const VkAntiLagDataAMD* pData) noexcept {
+
     const auto context = layer_context.get_context(device);
     if (layer_context.should_expose_reflex) {
         context->vtable.AntiLagUpdateAMD(device, pData);
@@ -851,8 +851,7 @@ AntiLagUpdateAMD(VkDevice device, const VkAntiLagDataAMD* pData) {
 
 static VKAPI_ATTR VkResult VKAPI_CALL
 LatencySleepNV(VkDevice device, VkSwapchainKHR swapchain,
-               const VkLatencySleepInfoNV* pSleepInfo) {
-
+               const VkLatencySleepInfoNV* pSleepInfo) noexcept {
     const auto context = layer_context.get_context(device);
     if (!layer_context.should_expose_reflex) {
         return context->vtable.LatencySleepNV(device, swapchain, pSleepInfo);
@@ -868,7 +867,7 @@ LatencySleepNV(VkDevice device, VkSwapchainKHR swapchain,
 }
 
 static VKAPI_ATTR void VKAPI_CALL QueueNotifyOutOfBandNV(
-    VkQueue queue, const VkOutOfBandQueueTypeInfoNV* pQueueTypeInfo) {
+    VkQueue queue, const VkOutOfBandQueueTypeInfoNV* pQueueTypeInfo) noexcept {
 
     const auto context = layer_context.get_context(queue);
     if (!layer_context.should_expose_reflex) {
@@ -885,8 +884,7 @@ static VKAPI_ATTR void VKAPI_CALL QueueNotifyOutOfBandNV(
 
 static VKAPI_ATTR VkResult VKAPI_CALL
 SetLatencySleepModeNV(VkDevice device, VkSwapchainKHR swapchain,
-                      const VkLatencySleepModeInfoNV* pSleepModeInfo) {
-
+                      const VkLatencySleepModeInfoNV* pSleepModeInfo) noexcept {
     const auto context = layer_context.get_context(device);
     if (!layer_context.should_expose_reflex) {
         return context->vtable.SetLatencySleepModeNV(device, swapchain,
@@ -904,7 +902,7 @@ SetLatencySleepModeNV(VkDevice device, VkSwapchainKHR swapchain,
 
 static VKAPI_ATTR void VKAPI_CALL
 SetLatencyMarkerNV(VkDevice device, VkSwapchainKHR swapchain,
-                   const VkSetLatencyMarkerInfoNV* info) {
+                   const VkSetLatencyMarkerInfoNV* info) noexcept {
     if (!layer_context.should_expose_reflex) {
         const auto context = layer_context.get_context(device);
         context->vtable.SetLatencyMarkerNV(device, swapchain, info);
@@ -914,8 +912,7 @@ SetLatencyMarkerNV(VkDevice device, VkSwapchainKHR swapchain,
 
 static VKAPI_ATTR void VKAPI_CALL
 GetLatencyTimingsNV(VkDevice device, VkSwapchainKHR swapchain,
-                    VkGetLatencyMarkerInfoNV* timings) {
-
+                    VkGetLatencyMarkerInfoNV* timings) noexcept {
     if (!layer_context.should_expose_reflex) {
         const auto context = layer_context.get_context(device);
         context->vtable.GetLatencyTimingsNV(device, swapchain, timings);
@@ -930,38 +927,8 @@ GetLatencyTimingsNV(VkDevice device, VkSwapchainKHR swapchain,
 
 } // namespace low_latency
 
-// This is a bit of template hackery which generates a wrapper function for each
-// of our hooks that keeps exceptions from getting sucked back into the caller.
-// This is useful because we don't want to violate the Vulkan ABI by accident in
-// the case that we don't use try/catch somewhere. It's also useful because we
-// only use exceptions in unrecoverable absolute failure cases. This means that
-// we can just write our code while ignoring the potential for it to throw and
-// have errors somewhat gracefully handled by this wrapper.
-//
-// I was considering mapping certain exception types like std::out_of_memory to
-// their vulkan equivalent (only when allowed by the API). In the end I think
-// it's just bloat and ultimately less informative than a 'VK_ERROR_UNKNOWN'
-// because then the caller knows that it probably wasn't triggered as part of
-// the standard Vulkan codepath.
-template <auto Func> struct HookExceptionWrapper;
-template <typename R, typename... Args, R (*Func)(Args...)>
-struct HookExceptionWrapper<Func> {
-    static R call(Args... args) noexcept {
-        try {
-            return Func(args...);
-        } catch (...) {
-            if constexpr (std::is_same_v<R, VkResult>) {
-                return VK_ERROR_UNKNOWN;
-            }
-        }
-
-        std::terminate();
-    }
-};
-
 #define HOOK_ENTRY(vk_name_literal, fn_sym)                                    \
-    {vk_name_literal, reinterpret_cast<PFN_vkVoidFunction>(                    \
-                          &HookExceptionWrapper<fn_sym>::call)}
+    {vk_name_literal, reinterpret_cast<PFN_vkVoidFunction>(fn_sym)}
 
 using func_map_t = std::unordered_map<std::string_view, PFN_vkVoidFunction>;
 static const auto instance_functions = func_map_t{
@@ -1022,8 +989,9 @@ static const auto device_functions = func_map_t{
 };
 #undef HOOK_ENTRY
 
-VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL
-LowLatency_GetDeviceProcAddr(VkDevice device, const char* const pName) {
+VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL LowLatency_GetDeviceProcAddr(
+    VkDevice device, const char* const pName) noexcept {
+
     if (!pName || !device) {
         return nullptr;
     }
@@ -1038,8 +1006,9 @@ LowLatency_GetDeviceProcAddr(VkDevice device, const char* const pName) {
     return context->vtable.GetDeviceProcAddr(device, pName);
 }
 
-VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL
-LowLatency_GetInstanceProcAddr(VkInstance instance, const char* const pName) {
+VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL LowLatency_GetInstanceProcAddr(
+    VkInstance instance, const char* const pName) noexcept {
+
     if (!pName) {
         return nullptr;
     }
