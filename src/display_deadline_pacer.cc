@@ -143,6 +143,54 @@ DeviceClock::time_point DisplayDeadlinePacer::pace(
         return jit_release;
     }
 
+    // 3.5 Variable refresh rate (VRR) FIFO path: skip the vblank grid but
+    //     still apply PI feedback to maintain a steady presentation cadence.
+    //     VRR displays have no fixed vblank boundary — they accept a frame
+    //     at any time within their supported refresh range. Aligning to a
+    //     hypothetical grid here would add unnecessary delay without any
+    //     benefit to smoothness, since the display hardware itself adapts
+    //     its refresh timing to the frame arrival cadence.
+    if (is_vrr_) {
+        const auto now = DeviceClock::now();
+        auto target_release = jit_release;
+
+        const auto pi_term_ns = KP * pi_last_err_ns_ + KI * pi_integral_ns_;
+        const auto refresh_dur_ns = static_cast<double>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                refresh_interval_).count());
+        if (refresh_dur_ns > 0.0) {
+            const auto half = refresh_dur_ns / 2.0;
+            const auto clamped = std::clamp(pi_term_ns, -half, half);
+            target_release -= DeviceClock::duration{
+                static_cast<DeviceClock::rep>(clamped)};
+        } else {
+            target_release -= DeviceClock::duration{
+                static_cast<DeviceClock::rep>(pi_term_ns)};
+        }
+
+        target_release = std::min(target_release, now + refresh_interval_);
+
+        DeviceClock::duration spin_budget{LEGACY_SPIN_BUDGET};
+        if (device_.clock) {
+            const auto eb = device_.clock->error_bound_duration();
+            const auto adaptive = std::max(
+                DeviceClock::duration{MIN_SPIN_BUDGET},
+                DeviceClock::duration{
+                    static_cast<DeviceClock::rep>(
+                        SPIN_BUDGET_MULTIPLIER * eb.count())});
+            if (adaptive > DeviceClock::duration{}) {
+                spin_budget = adaptive;
+            }
+        }
+
+        const auto release = std::max(now, target_release);
+        hybrid_sleep_until(release, spin_budget);
+
+        last_target_present_ = release;
+        has_target_present_.store(true, std::memory_order_release);
+        return release;
+    }
+
     // 4. Compute a target present time on the vblank grid.
     //    target_present = smallest vblank_k >= jit_release + render_budget
     //    (We use the Tier 1 release as the floor — never release before then.)
