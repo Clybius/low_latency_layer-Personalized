@@ -55,11 +55,11 @@ class LayerContext final : public Context {
     // NVIDIA card.
     static constexpr auto SPOOF_NVIDIA_ENV = "LOW_LATENCY_LAYER_SPOOF_NVIDIA";
 
-    // Additional delays for decoupled simulation should be forced on
-    // (delay_controller). This is usually automatically handled on a
-    // per-application basis.
-    static constexpr auto FORCE_DECOUPLED_ENV =
-        "LOW_LATENCY_LAYER_FORCE_DECOUPLED";
+    // Optional layer-imposed FPS cap. 0 = disabled. When >0, the layer caps
+    // the frame rate at this value via the PresentationPacer's release-side
+    // floor (max with the app's own cap). Favors low latency: delays the start
+    // of the next frame, not the present of a finished one.
+    static constexpr auto FPS_LIMIT_ENV = "LOW_LATENCY_LAYER_FPS_LIMIT";
 
   public:
     // Constants for spoofing.
@@ -70,7 +70,7 @@ class LayerContext final : public Context {
   public:
     const bool should_expose_reflex{};
     const bool should_spoof_nvidia{};
-    const bool should_force_decoupled{};
+    const double fps_limit{}; // 0 = disabled; >0 = max frames per second
 
     std::shared_mutex mutex{};
     std::unordered_map<void*, std::shared_ptr<Context>> contexts{};

@@ -34,8 +34,9 @@ class DeviceClock final {
     void do_calibration(const std::stop_token stoken);
 
   private:
-    std::shared_mutex mutex{};
-    std::condition_variable_any cv{};
+    // mutable so const accessors (error_bound_duration) can take a shared_lock.
+    mutable std::shared_mutex mutex{};
+    mutable std::condition_variable_any cv{};
     std::uint64_t host_ns{};
     std::uint64_t error_bound{};
     std::uint64_t device_ticks{};
@@ -51,6 +52,10 @@ class DeviceClock final {
 
   public:
     static time_point now();
+
+    // Returns the most recent calibrated error bound as a DeviceClock::duration.
+    // Use this as a minimum spin-tail budget for sleeps to account for calibration jitter.
+    duration error_bound_duration() const;
 
   public:
     time_point ticks_to_time(const std::uint64_t& ticks);

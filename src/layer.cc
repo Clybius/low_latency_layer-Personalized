@@ -218,6 +218,19 @@ static VKAPI_ATTR VkResult VKAPI_CALL CreateDevice(
                                  [&requested](const auto& wanted) {
                                      return !requested.contains(wanted);
                                  });
+
+            // Silently enable any present-timing extension the driver supports
+            // (Tier 2 backend). Never required; never advertised by us.
+            const auto mode = context->present_timing_mode;
+            const char* pt_ext = nullptr;
+            if (mode == PresentTimingMode::ext_present_timing) {
+                pt_ext = VK_EXT_PRESENT_TIMING_EXTENSION_NAME;
+            } else if (mode == PresentTimingMode::google_display_timing) {
+                pt_ext = VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME;
+            }
+            if (pt_ext && !requested.contains(pt_ext)) {
+                next_extensions.push_back(pt_ext);
+            }
         }
 
         return next_extensions;
@@ -545,10 +558,10 @@ QueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* present_info) noexcept {
     const auto context = layer_context.get_context(queue);
     const auto& vtable = context->device.vtable;
 
+    assert(present_info);
     const auto result = vtable.QueuePresentKHR(queue, present_info);
 
     // We must *ALWAYS* notify_present regardless of the error here.
-    assert(present_info);
     if (context->strategy) {
         context->strategy->notify_present(*present_info);
     }
@@ -833,6 +846,32 @@ DestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain,
     context->vtable.DestroySwapchainKHR(device, swapchain, pAllocator);
 }
 
+static VKAPI_ATTR VkResult VKAPI_CALL
+AcquireNextImageKHR(VkDevice device, VkSwapchainKHR swapchain,
+                    std::uint64_t timeout, VkSemaphore semaphore,
+                    VkFence fence, std::uint32_t* pImageIndex) noexcept {
+    const auto context = layer_context.get_context(device);
+    const auto result = context->vtable.AcquireNextImageKHR(
+        device, swapchain, timeout, semaphore, fence, pImageIndex);
+    if (context->strategy) {
+        context->strategy->notify_acquire(swapchain, DeviceClock::now());
+    }
+    return result;
+}
+
+static VKAPI_ATTR VkResult VKAPI_CALL
+AcquireNextImage2KHR(VkDevice device, const VkAcquireNextImageInfoKHR* pAcquireInfo,
+                     std::uint32_t* pImageIndex) noexcept {
+    const auto context = layer_context.get_context(device);
+    const auto result = context->vtable.AcquireNextImage2KHR(
+        device, pAcquireInfo, pImageIndex);
+    if (context->strategy && pAcquireInfo) {
+        context->strategy->notify_acquire(pAcquireInfo->swapchain,
+                                          DeviceClock::now());
+    }
+    return result;
+}
+
 static VKAPI_ATTR void VKAPI_CALL
 AntiLagUpdateAMD(VkDevice device, const VkAntiLagDataAMD* pData) noexcept {
 
@@ -908,6 +947,20 @@ SetLatencyMarkerNV(VkDevice device, VkSwapchainKHR swapchain,
         context->vtable.SetLatencyMarkerNV(device, swapchain, info);
         return;
     }
+
+    // Record the marker in the per-presentID ring buffer so GetLatencyTimingsNV
+    // can return it. The driver isn't called — we generate the timings from
+    // the app-supplied markers.
+    if (info == nullptr) {
+        return;
+    }
+    const auto context = layer_context.get_context(device);
+    const auto strategy = dynamic_cast<LowLatency2DeviceStrategy*>(
+        context->strategy.get());
+    if (strategy == nullptr) {
+        return;
+    }
+    strategy->notify_set_latency_marker(info->presentID, info->marker);
 }
 
 static VKAPI_ATTR void VKAPI_CALL
@@ -919,10 +972,30 @@ GetLatencyTimingsNV(VkDevice device, VkSwapchainKHR swapchain,
         return;
     }
 
-    // We don't do anything here but the caller still expects us to change
-    // timings->timingCount to the amount we wrote - so set it to zero.
     assert(timings);
-    timings->timingCount = 0;
+    if (timings->pTimings == nullptr || timings->timingCount == 0) {
+        timings->timingCount = 0;
+        return;
+    }
+
+    // The caller passes an array of VkLatencyTimingsFrameReportNV with
+    // presentID set as the input. We copy them and fill in the marker
+    // timings from our per-presentID ring buffer.
+    const auto context = layer_context.get_context(device);
+    const auto strategy = dynamic_cast<LowLatency2DeviceStrategy*>(
+        context->strategy.get());
+    if (strategy == nullptr) {
+        timings->timingCount = 0;
+        return;
+    }
+
+    // The input/output are the same buffer in the spec — we copy
+    // presentID and other inputs, then fill in the time fields.
+    const auto in_reports = std::vector<VkLatencyTimingsFrameReportNV>(
+        timings->pTimings, timings->pTimings + timings->timingCount);
+    timings->timingCount = strategy->copy_latency_timings(
+        in_reports.data(), static_cast<std::uint32_t>(in_reports.size()),
+        timings->pTimings);
 }
 
 } // namespace low_latency
@@ -986,6 +1059,9 @@ static const auto device_functions = func_map_t{
 
     HOOK_ENTRY("vkCreateSwapchainKHR", low_latency::CreateSwapchainKHR),
     HOOK_ENTRY("vkDestroySwapchainKHR", low_latency::DestroySwapchainKHR),
+
+    HOOK_ENTRY("vkAcquireNextImageKHR", low_latency::AcquireNextImageKHR),
+    HOOK_ENTRY("vkAcquireNextImage2KHR", low_latency::AcquireNextImage2KHR),
 };
 #undef HOOK_ENTRY
 

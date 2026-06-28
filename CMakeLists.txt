@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.12)
 project(low_latency_layer
     VERSION 0.02
     LANGUAGES CXX
@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-file(GLOB_RECURSE CXX_SOURCES src/*.cc)
+file(GLOB_RECURSE CXX_SOURCES CONFIGURE_DEPENDS src/*.cc)
 
 set(LIBRARY_NAME VkLayer_KORTHOS_LowLatency)
 add_library(${LIBRARY_NAME} SHARED

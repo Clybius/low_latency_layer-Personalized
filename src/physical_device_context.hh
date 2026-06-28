@@ -7,8 +7,19 @@
 #include <vulkan/vulkan_core.h>
 
 #include "context.hh"
+#include "device_clock.hh"
 
 namespace low_latency {
+
+// Which optional present-timing extension (if any) the driver supports.
+// Used to decide between the Tier-1 predictive pacer and the Tier-2
+// display-deadline pacer. Never required — if neither is present, Tier 1 is
+// used unconditionally.
+enum class PresentTimingMode : std::uint8_t {
+    none = 0,
+    ext_present_timing,
+    google_display_timing,
+};
 
 class PhysicalDeviceContext final : public Context {
   public:
@@ -28,6 +39,13 @@ class PhysicalDeviceContext final : public Context {
 
     std::unique_ptr<VkPhysicalDeviceProperties> properties{};
     std::unique_ptr<std::vector<VkQueueFamilyProperties>> queue_properties{};
+
+    // Optional present-timing support (never required).
+    PresentTimingMode present_timing_mode{PresentTimingMode::none};
+    // Refresh cycle in DeviceClock::duration; 0 = unknown. Filled lazily
+    // when Tier 2 backend asks for it.
+    DeviceClock::duration refresh_interval{};
+    bool is_vrr{false};
 
   public:
     explicit PhysicalDeviceContext(InstanceContext& instance_context,

@@ -2,6 +2,7 @@
 #include "device_context.hh"
 #include "queue_strategy.hh"
 
+#include <chrono>
 #include <mutex>
 #include <vulkan/utility/vk_struct_helper.hpp>
 #include <vulkan/vulkan_core.h>
@@ -35,6 +36,8 @@ void LowLatency2DeviceStrategy::notify_create_swapchain(
     const auto iter = this->swapchain_monitors.emplace(swapchain, this->device);
     iter.first->second.update_params(was_low_latency_requested,
                                      std::chrono::microseconds{0});
+    iter.first->second.attach_swapchain(swapchain);
+    iter.first->second.set_present_mode(info.presentMode);
 }
 
 void LowLatency2DeviceStrategy::notify_destroy_swapchain(
@@ -126,6 +129,115 @@ void LowLatency2DeviceStrategy::notify_latency_sleep_nv(
         return;
     }
     iter->second.notify_semaphore(semaphore_signal);
+}
+
+void LowLatency2DeviceStrategy::notify_acquire(
+    const VkSwapchainKHR& swapchain, const DeviceClock::time_point& time) {
+    const auto lock = std::shared_lock{this->mutex};
+    const auto iter = this->swapchain_monitors.find(swapchain);
+    if (iter == std::end(this->swapchain_monitors)) {
+        return;
+    }
+    iter->second.record_acquire(time);
+}
+
+std::optional<DeviceClock::time_point>
+LowLatency2DeviceStrategy::get_target_present(
+    const VkSwapchainKHR& swapchain) const {
+    const auto lock = std::shared_lock{this->mutex};
+    const auto iter = this->swapchain_monitors.find(swapchain);
+    if (iter == std::end(this->swapchain_monitors)) {
+        return std::nullopt;
+    }
+    return iter->second.get_target_present();
+}
+
+FrameMarkers& LowLatency2DeviceStrategy::get_or_create_marker_record(
+    std::uint64_t present_id) {
+    for (auto& rec : this->marker_ring_) {
+        if (rec.present_id == present_id) {
+            return rec;
+        }
+    }
+    auto rec = FrameMarkers{};
+    rec.present_id = present_id;
+    this->marker_ring_.push_back(rec);
+    while (this->marker_ring_.size() > MARKER_RING_SIZE) {
+        this->marker_ring_.pop_front();
+    }
+    return this->marker_ring_.back();
+}
+
+void LowLatency2DeviceStrategy::notify_set_latency_marker(
+    std::uint64_t present_id, VkLatencyMarkerNV marker) {
+    const auto marker_idx = static_cast<std::size_t>(marker);
+    if (marker_idx >= 8) {
+        return;
+    }
+    // Out-of-band markers (8+) and TRIGGER_FLASH (7) are not stored.
+    if (marker == VK_LATENCY_MARKER_TRIGGER_FLASH_NV) {
+        return;
+    }
+
+    const auto now_us = static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            DeviceClock::now().time_since_epoch())
+            .count());
+
+    const auto lock = std::scoped_lock{this->marker_mutex_};
+    auto& rec = this->get_or_create_marker_record(present_id);
+    rec.marker_us[marker_idx] = now_us;
+
+    // Update the per-stage EWMA for diagnostic purposes. We use the
+    // inter-marker interval (the time since the previous marker on the
+    // same presentID) so the EWMA tracks each pipeline stage's duration.
+    if (marker_idx > 0 && marker_idx < STAGE_EWMA_COUNT) {
+        const auto prev_us = rec.marker_us[marker_idx - 1];
+        if (prev_us != 0 && now_us > prev_us) {
+            const auto interval = static_cast<double>(now_us - prev_us);
+            if (this->stage_ewma_seeded[marker_idx]) {
+                this->stage_ewma_us[marker_idx] =
+                    STAGE_EWMA_ALPHA * interval +
+                    (1.0 - STAGE_EWMA_ALPHA) * this->stage_ewma_us[marker_idx];
+            } else {
+                this->stage_ewma_us[marker_idx] = interval;
+                this->stage_ewma_seeded[marker_idx] = true;
+            }
+        }
+    }
+}
+
+std::uint32_t LowLatency2DeviceStrategy::copy_latency_timings(
+    const VkLatencyTimingsFrameReportNV* in_reports,
+    std::uint32_t count,
+    VkLatencyTimingsFrameReportNV* out_reports) {
+    if (in_reports == nullptr || out_reports == nullptr || count == 0) {
+        return 0;
+    }
+    const auto lock = std::scoped_lock{this->marker_mutex_};
+    auto written = std::uint32_t{0};
+    for (std::uint32_t i = 0; i < count; ++i) {
+        out_reports[i] = in_reports[i];
+        const auto present_id = in_reports[i].presentID;
+        for (const auto& rec : this->marker_ring_) {
+            if (rec.present_id != present_id) {
+                continue;
+            }
+            out_reports[i].inputSampleTimeUs = rec.marker_us[0];
+            out_reports[i].simStartTimeUs = rec.marker_us[1];
+            out_reports[i].simEndTimeUs = rec.marker_us[2];
+            out_reports[i].renderSubmitStartTimeUs = rec.marker_us[3];
+            out_reports[i].renderSubmitEndTimeUs = rec.marker_us[4];
+            out_reports[i].presentStartTimeUs = rec.marker_us[5];
+            out_reports[i].presentEndTimeUs = rec.marker_us[6];
+            // gpuRenderStartTimeUs/End are set by the GPU timestamp spans
+            // when this presentID's work is awaited (see SwapchainMonitor).
+            // We don't have them here — leave as 0.
+            break;
+        }
+        ++written;
+    }
+    return written;
 }
 
 } // namespace low_latency

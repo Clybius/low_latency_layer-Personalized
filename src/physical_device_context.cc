@@ -36,10 +36,44 @@ does_support_required_extensions(const PhysicalDeviceContext& context) {
                                });
 }
 
+static PresentTimingMode
+detect_present_timing(const PhysicalDeviceContext& context) {
+    auto count = std::uint32_t{};
+    THROW_NOT_VKSUCCESS(
+        context.instance.vtable.EnumerateDeviceExtensionProperties(
+            context.physical_device, nullptr, &count, nullptr));
+
+    auto supported = std::vector<VkExtensionProperties>(count);
+    THROW_NOT_VKSUCCESS(
+        context.instance.vtable.EnumerateDeviceExtensionProperties(
+            context.physical_device, nullptr, &count,
+            std::data(supported)));
+
+    auto has_ext = false;
+    auto has_google = false;
+    for (const auto& p : supported) {
+        if (std::string_view{p.extensionName} ==
+            VK_EXT_PRESENT_TIMING_EXTENSION_NAME) {
+            has_ext = true;
+        } else if (std::string_view{p.extensionName} ==
+                   VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME) {
+            has_google = true;
+        }
+    }
+    if (has_ext) {
+        return PresentTimingMode::ext_present_timing;
+    }
+    if (has_google) {
+        return PresentTimingMode::google_display_timing;
+    }
+    return PresentTimingMode::none;
+}
+
 PhysicalDeviceContext::PhysicalDeviceContext(
     InstanceContext& instance_context, const VkPhysicalDevice& physical_device)
     : instance(instance_context), physical_device(physical_device),
-      supports_required_extensions(does_support_required_extensions(*this)) {
+      supports_required_extensions(does_support_required_extensions(*this)),
+      present_timing_mode(detect_present_timing(*this)) {
 
     const auto& vtable = instance_context.vtable;
 

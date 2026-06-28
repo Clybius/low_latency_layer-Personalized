@@ -65,6 +65,11 @@ DeviceClock::time_point DeviceClock::now() {
                       std::chrono::nanoseconds{ts.tv_nsec}};
 }
 
+DeviceClock::duration DeviceClock::error_bound_duration() const {
+    const auto lock = std::shared_lock{this->mutex};
+    return duration{static_cast<rep>(this->error_bound)};
+}
+
 DeviceClock::time_point DeviceClock::ticks_to_time(const std::uint64_t& ticks) {
     const auto& pd = device.physical_device.properties;
     const auto ns_tick = static_cast<double>(pd->limits.timestampPeriod);
