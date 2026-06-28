@@ -4,6 +4,7 @@
 
 > [!IMPORTANT]
 > **As of v0.2.0, this layer is opt-in.** Set `LOW_LATENCY_LAYER=1` in your environment to enable it globally. Alternatively, this environment variable may be added to per-game Steam launch options to enable it on a case-by-case basis. Set `DISABLE_LOW_LATENCY_LAYER=1` to forcefully disable the layer (takes precedence).
+> **AI Sloppa Notice.** This fork was partially re-written using various OSS models.
 
 A C++23 implicit Vulkan layer that reduces click-to-photon latency by implementing both AMD and NVIDIA's latency reduction technologies in a hardware-agnostic manner.
 
