@@ -67,6 +67,12 @@ class PredictiveQueuePacer final : public PresentationPacer {
     // immediately rather than waiting for the next full interval.
     static constexpr double SKIP_HITCH_MULT = 2.5;
 
+    // Trend smoothing factor (beta) for the double EWMA (Holt's linear
+    // method). Controls how quickly the trend estimates adapts. Lower
+    // values produce a smoother trend at the cost of slower response to
+    // genuine scene-complexity shifts.
+    static constexpr double TREND_ALPHA = 0.15;
+
     // Min spin budget — even when calibration error is zero, leave a small
     // spin tail to absorb clock noise between check and wake.
     static constexpr auto MIN_SPIN_BUDGET = std::chrono::microseconds{50};
@@ -82,6 +88,7 @@ class PredictiveQueuePacer final : public PresentationPacer {
     const DeviceContext* device_{};
 
     std::optional<double> ewma_render_ns{};
+    double ewma_render_trend{0.0};
     std::optional<double> ewma_cpu_lag_ns{};
     std::optional<DeviceClock::time_point> release_prev{};
 

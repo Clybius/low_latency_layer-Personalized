@@ -1,10 +1,8 @@
 #ifndef STRATEGIES_ANTI_LAG_DEVICE_STRATEGY_HH_
 #define STRATEGIES_ANTI_LAG_DEVICE_STRATEGY_HH_
 
-#include "presentation_pacer.hh"
-#include "strategies/device_strategy.hh"
-
 #include "device_clock.hh"
+#include "strategies/device_strategy.hh"
 
 #include <vulkan/vulkan.h>
 
@@ -17,6 +15,7 @@
 namespace low_latency {
 
 class DeviceContext;
+class AntiLagMonitor;
 
 class AntiLagDeviceStrategy final : public DeviceStrategy {
   private:
@@ -25,18 +24,16 @@ class AntiLagDeviceStrategy final : public DeviceStrategy {
     std::optional<std::uint64_t> frame_index{};
     bool is_enabled{};
 
-    // Most recently created swapchain. We bind it to the Tier 2 pacer so
-    // the past-presentation-timing poll (driven from notify_update) can
-    // query the driver for actual present times. Set in
-    // notify_create_swapchain, cleared in notify_destroy_swapchain.
+    // Most recently created swapchain. Forwarded to the monitor so the
+    // past-presentation-timing poll (driven from the monitor thread) can
+    // query the driver for actual present times.
     VkSwapchainKHR current_swapchain_{VK_NULL_HANDLE};
 
-    // Last time we polled past presentation timings. Throttled to ~8 ms
-    // to avoid hammering the driver every frame.
-    DeviceClock::time_point last_feedback_poll_{};
-
-    std::unique_ptr<PresentationPacer> pacer;
-    DeviceClock::time_point release_prev{};
+    // Per-device async pacing monitor. Owns the pacer and a dedicated
+    // thread that handles GPU completion wait, feedback polling, and
+    // pacing sleep. AntiLagUpdateAMD queues work here and returns
+    // immediately — the next INPUT call provides back-pressure.
+    std::unique_ptr<AntiLagMonitor> monitor;
 
   public:
     explicit AntiLagDeviceStrategy(DeviceContext& device);

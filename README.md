@@ -21,9 +21,9 @@ This fork evolves the original layer with substantial architectural improvements
 
 The layer now features a two-tier presentation pacing architecture:
 
-- **Tier 1 — PredictiveQueuePacer** (always available): Just-in-time release using GPU-timestamp-driven closed-loop EWMA control. Predicts render duration and CPU-to-GPU dispatch lag, releasing the next frame so GPU work starts when the previous frame's GPU work ends — minimizing render queue depth. Adaptive alpha (hitch/noisy/nominal/stable) with hitch rejection prevents transient spikes from destabilizing the estimate.
+- **Tier 1 — PredictiveQueuePacer** (always available): Just-in-time release using GPU-timestamp-driven closed-loop double EWMA (Holt's method) control with trend tracking. Predicts render duration (`level + trend`) and CPU-to-GPU dispatch lag, releasing the next frame so GPU work starts when the previous frame's GPU work ends — minimizing render queue depth. Adaptive alpha (hitch/noisy/nominal/stable) selects the level smoothing factor based on deviation from the trend-aware prediction; the trend component (beta=0.15, clamped to ±half level) allows the pacer to track gradual scene-complexity shifts without misclassifying them as hitches.
 
-- **Tier 2 — DisplayDeadlinePacer** (when `VK_EXT_present_timing` or `VK_GOOGLE_display_timing` is available): Vblank-anchored PI loop that wraps the Tier 1 pacer. Aligns release to the display's refresh boundary, with an optional PI feedback loop driven by `vkGetPastPresentationTiming*` to correct for sustained release-to-actual-present error. VRR-capable (falls back to cadence pacing when `refreshInterval==0`). Supports MAILBOX/IMMEDIATE present modes by skipping the vblank grid.
+- **Tier 2 — DisplayDeadlinePacer** (when `VK_EXT_present_timing` or `VK_GOOGLE_display_timing` is available): Vblank-anchored PI loop that wraps the Tier 1 pacer. Aligns release to the display's refresh boundary, with an optional PI feedback loop driven by `vkGetPastPresentationTiming*` to correct for sustained release-to-actual-present error. **VRR-aware**: on variable-refresh-rate displays (`refreshInterval==0`), the vblank grid is skipped and PI correction is applied directly to the JIT release — avoiding unnecessary alignment delay while retaining feedback-based drift correction. Supports MAILBOX/IMMEDIATE present modes by skipping the vblank grid.
 
 Both backends use a hybrid sleep strategy: coarse `sleep_for` with a calibrated spin tail sized to the `DeviceClock` error bound, ensuring precise wake-up timing.
 
@@ -45,9 +45,11 @@ Queries `VK_EXT_present_timing` or `VK_GOOGLE_display_timing` for:
 
 Full implementation of NVIDIA's marker ring buffer with diagnostic per-stage EWMAs (7 pipeline stages). Markers are recorded per-presentID in a bounded ring buffer (64 entries) and read back by `GetLatencyTimingsNV`. GPU render timestamps are populated from the SubmissionSpan timestamps we already collect.
 
-### SwapchainMonitor
+### SwapchainMonitor & AntiLagMonitor
 
-Per-swapchain dedicated monitor thread that hosts the pacer, manages pending timeline semaphore signals, and polls past-presentation feedback. Semaphores are never dropped un-signalled — the monitor guarantees forward progress even during teardown when `QueueNotifyOutOfBandNV` is used.
+**SwapchainMonitor** — Per-swapchain dedicated monitor thread (NV Reflex path) that hosts the pacer, manages pending timeline semaphore signals, and polls past-presentation feedback. Semaphores are never dropped un-signalled — the monitor guarantees forward progress even during teardown when `QueueNotifyOutOfBandNV` is used.
+
+**AntiLagMonitor** — Per-device async monitor thread (Anti-Lag path). Ports the NV `SwapchainMonitor` threading model to Anti-Lag: GPU completion waiting, feedback polling, and pacing sleep all happen on a dedicated thread so `AntiLagUpdateAMD` can return immediately. Back-pressure limits queue depth to one frame — the next `AntiLagUpdateAMD(INPUT)` call blocks until the previous frame's pacing cycle finishes, allowing the app to overlap CPU work on the next frame while pacing runs asynchronously.
 
 ### Forwarding Unhandled Extensions
 
@@ -124,7 +126,7 @@ The layer intercepts Vulkan calls at three levels:
 
 2. **Timestamp injection** — `QueueSubmit`/`QueueSubmit2`/`QueueSubmit2KHR` are intercepted and GPU timestamp queries (TOP_OF_PIPE + BOTTOM_OF_PIPE) are injected as command buffers bracketing the application's work. These timestamps flow through a pool of pre-allocated query chunks, enabling per-submission GPU timing without additional driver overhead.
 
-3. **Pacing** — The pacer (Tier 1 or Tier 2) awaits GPU work completion via `SubmissionSpan::await_completed()`, computes a latency-optimal release point (using EWMA predictions of render duration and CPU dispatch lag), and sleeps the release thread until that point. In Reflex mode, timeline semaphores are signalled at the chosen release time; in Anti-Lag mode, `AntiLagUpdateAMD` blocks until the release target.
+3. **Pacing** — The pacer (Tier 1 or Tier 2) awaits GPU work completion via `SubmissionSpan::await_completed()`, computes a latency-optimal release point (using double EWMA predictions of render duration with trend tracking, plus CPU dispatch lag), and sleeps the release thread until that point. In Reflex mode, timeline semaphores are signalled at the chosen release time on the monitor thread; in Anti-Lag mode, `AntiLagUpdateAMD` queues work to the `AntiLagMonitor` thread and returns immediately, with back-pressure arriving on the *next* `AntiLagUpdateAMD` call — allowing CPU/GPU work overlap between frames.
 
 ### Architecture
 
@@ -158,7 +160,7 @@ App calls QueueSubmit/QueueSubmit2
  hybrid_sleep_until(release, spin_budget)
        │
        ▼
- Semaphore signalled (Reflex) / AntiLagUpdateAMD returns (Anti-Lag)
+  Semaphore signalled (Reflex) / AntiLagUpdateAMD returns immediately (Anti-Lag)
 ```
 
 ### Tiered Present-Timing Backend

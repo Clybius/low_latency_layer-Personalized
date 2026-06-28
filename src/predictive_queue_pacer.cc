@@ -61,16 +61,38 @@ DeviceClock::time_point PredictiveQueuePacer::pace(
             duration_cast<nanoseconds>(timing.gpu_end - timing.gpu_start).count());
         if (render_ns > 0.0) {
             window_push(render_window, render_window_count, render_ns);
+            // Use level+trend as the prediction for classification and
+            // rejection. During trend periods (scene complexity changing)
+            // this avoids misclassifying legitimate shifts as hitches.
+            const auto predicted = ewma_render_ns.has_value()
+                ? *ewma_render_ns + ewma_render_trend
+                : 0.0;
             const auto reject = render_window_count >= WINDOW_SIZE &&
-                ewma_render_ns &&
-                std::abs(render_ns - *ewma_render_ns) / *ewma_render_ns > REJECT_HITCH;
+                predicted > 0.0 &&
+                std::abs(render_ns - predicted) / predicted > REJECT_HITCH;
             if (!reject) {
-                const auto alpha = choose_alpha(render_ns,
-                    ewma_render_ns.value_or(0.0));
-                ewma_render_ns = ewma_render_ns
-                                     ? alpha * render_ns +
-                                           (1.0 - alpha) * *ewma_render_ns
-                                     : render_ns;
+                const auto alpha = choose_alpha(render_ns, predicted);
+                if (ewma_render_ns.has_value()) {
+                    // Double EWMA (Holt's linear method):
+                    //   level_t = alpha * obs + (1-alpha) * (level_{t-1} + trend_{t-1})
+                    //   trend_t = beta  * (level_t - level_{t-1}) + (1-beta) * trend_{t-1}
+                    const auto old_level = *ewma_render_ns;
+                    const auto new_level = alpha * render_ns +
+                        (1.0 - alpha) * (old_level + ewma_render_trend);
+                    ewma_render_trend = TREND_ALPHA * (new_level - old_level) +
+                        (1.0 - TREND_ALPHA) * ewma_render_trend;
+                    // Clamp trend to ±half the level so a single anomalous
+                    // frame cannot yank the prediction beyond reason.
+                    if (new_level > 0.0) {
+                        const auto max_trend = new_level / 2.0;
+                        ewma_render_trend = std::clamp(
+                            ewma_render_trend, -max_trend, max_trend);
+                    }
+                    ewma_render_ns = new_level;
+                } else {
+                    ewma_render_ns = render_ns;
+                    ewma_render_trend = 0.0;
+                }
             }
         }
     }
@@ -109,7 +131,8 @@ DeviceClock::time_point PredictiveQueuePacer::pace(
         timing.gpu_end > timing.gpu_start) {
         const auto observed_ns = static_cast<double>(
             duration_cast<nanoseconds>(timing.gpu_end - timing.gpu_start).count());
-        if (observed_ns > SKIP_HITCH_MULT * *ewma_render_ns) {
+        const auto predicted = *ewma_render_ns + ewma_render_trend;
+        if (observed_ns > SKIP_HITCH_MULT * predicted) {
             const_cast<FrameTiming&>(timing).skip_next_release = true;
         }
     }
@@ -137,9 +160,12 @@ DeviceClock::time_point PredictiveQueuePacer::pace(
 
     // Clamp the predictive target to at most one predicted render beyond now
     // (hitch recovery — don't sleep forever on a stale render estimate).
+    // With trend tracking the prediction = level + trend, which is more
+    // accurate during scene-complexity shifts.
     if (ewma_render_ns && *ewma_render_ns > 0.0) {
+        const auto predicted = *ewma_render_ns + ewma_render_trend;
         const auto max_sleep = DeviceClock::duration{
-            static_cast<DeviceClock::rep>(*ewma_render_ns)};
+            static_cast<DeviceClock::rep>(predicted)};
         target_release = std::min(target_release, now + max_sleep);
     }
 
