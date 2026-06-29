@@ -3,6 +3,7 @@
 #include "helper.hh"
 #include "layer_context.hh"
 #include "strategies/anti_lag/queue_strategy.hh"
+#include "strategies/anywhere/queue_strategy.hh"
 #include "strategies/low_latency2/queue_strategy.hh"
 #include "timestamp_pool.hh"
 
@@ -46,6 +47,9 @@ QueueContext::QueueContext(DeviceContext& device, const VkQueue& queue,
     this->command_pool = std::make_unique<CommandPoolOwner>(*this);
     this->timestamp_pool = std::make_unique<TimestampPool>(*this);
     this->strategy = [&]() -> std::unique_ptr<QueueStrategy> {
+        if (device.instance.layer.should_anywhere) {
+            return std::make_unique<AnywhereQueueStrategy>(*this);
+        }
         if (device.instance.layer.should_expose_reflex) {
             return std::make_unique<LowLatency2QueueStrategy>(*this);
         }

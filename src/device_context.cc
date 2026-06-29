@@ -2,6 +2,7 @@
 
 #include "layer_context.hh"
 #include "strategies/anti_lag/device_strategy.hh"
+#include "strategies/anywhere/device_strategy.hh"
 #include "strategies/low_latency2/device_strategy.hh"
 
 #include <utility>
@@ -24,6 +25,9 @@ DeviceContext::DeviceContext(InstanceContext& parent_instance,
 
     this->clock = std::make_unique<DeviceClock>(*this);
     this->strategy = [&]() -> std::unique_ptr<DeviceStrategy> {
+        if (parent_instance.layer.should_anywhere) {
+            return std::make_unique<AnywhereDeviceStrategy>(*this);
+        }
         if (parent_instance.layer.should_expose_reflex) {
             return std::make_unique<LowLatency2DeviceStrategy>(*this);
         }

@@ -25,7 +25,9 @@ static double parse_double_env(const auto& name) {
 
 LayerContext::LayerContext()
     : should_expose_reflex(parse_bool_env(REFLEX_ENV)),
+      should_anywhere(parse_bool_env(ANYWHERE_ENV)),
       should_spoof_nvidia(parse_bool_env(SPOOF_NVIDIA_ENV)),
+      should_debug(parse_bool_env(DEBUG_ENV)),
       fps_limit(parse_double_env(FPS_LIMIT_ENV)) {}
 
 LayerContext::~LayerContext() {}

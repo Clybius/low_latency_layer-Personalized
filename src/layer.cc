@@ -1,5 +1,6 @@
 #include "layer.hh"
 
+#include <cstdio>
 #include <iterator>
 #include <ranges>
 #include <span>
@@ -23,6 +24,7 @@
 #include "layer_context.hh"
 #include "queue_context.hh"
 #include "strategies/anti_lag/device_strategy.hh"
+#include "strategies/anywhere/device_strategy.hh"
 #include "strategies/low_latency2/device_strategy.hh"
 #include "strategies/low_latency2/queue_strategy.hh"
 #include "timestamp_pool.hh"
@@ -168,9 +170,16 @@ static VKAPI_ATTR VkResult VKAPI_CALL CreateDevice(
         std::begin(enabled_extensions), std::end(enabled_extensions));
 
     const auto was_layer_enabled =
+        layer_context.should_anywhere ||
         requested.contains(!layer_context.should_expose_reflex
                                ? VK_AMD_ANTI_LAG_EXTENSION_NAME
                                : VK_NV_LOW_LATENCY_2_EXTENSION_NAME);
+
+    if (layer_context.should_debug) {
+        std::fprintf(stderr, "[LowLatency] CreateDevice: was_layer_enabled=%d anywhere=%d reflex=%d\n",
+                     was_layer_enabled, layer_context.should_anywhere,
+                     layer_context.should_expose_reflex);
+    }
 
     const auto context = layer_context.get_context(physical_device);
     if (was_layer_enabled && !context->supports_required_extensions) {
@@ -367,6 +376,11 @@ GetDeviceQueue(VkDevice device, std::uint32_t queue_family_index,
         return;
     }
 
+    if (layer_context.should_debug) {
+        std::fprintf(stderr, "[LowLatency] GetDeviceQueue: family=%u index=%u\n",
+                     queue_family_index, queue_index);
+    }
+
     // Look in our layer context, which has everything. If we were able to
     // insert a nullptr key, then it didn't already exist so we should
     // construct a new one.
@@ -561,9 +575,23 @@ QueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* present_info) noexcept {
     assert(present_info);
     const auto result = vtable.QueuePresentKHR(queue, present_info);
 
+    if (layer_context.should_debug) {
+        std::fprintf(stderr, "[LowLatency] QueuePresentKHR: swapchains=%u result=%d\n",
+                     present_info->swapchainCount, static_cast<int>(result));
+    }
+
     // We must *ALWAYS* notify_present regardless of the error here.
     if (context->strategy) {
         context->strategy->notify_present(*present_info);
+    }
+
+    // In ANYWHERE mode, the device strategy collects spans from all
+    // queues and hands them to the async pacing monitor.
+    if (layer_context.should_anywhere && context->device.strategy) {
+        if (auto* anywhere = dynamic_cast<AnywhereDeviceStrategy*>(
+                context->device.strategy.get())) {
+            anywhere->notify_present(*present_info);
+        }
     }
 
     return result;
@@ -584,6 +612,12 @@ static VKAPI_ATTR VkResult VKAPI_CALL EnumerateDeviceExtensionProperties(
 
     // Simplest case, they're not asking about us so we can happily forward it.
     if (pLayerName && std::string_view{pLayerName} != LAYER_NAME) {
+        return vtable.EnumerateDeviceExtensionProperties(
+            physical_device, pLayerName, pPropertyCount, pProperties);
+    }
+
+    // In ANYWHERE mode, don't inject any vendor extension — just forward.
+    if (layer_context.should_anywhere) {
         return vtable.EnumerateDeviceExtensionProperties(
             physical_device, pLayerName, pPropertyCount, pProperties);
     }
@@ -679,7 +713,8 @@ static VKAPI_ATTR void VKAPI_CALL GetPhysicalDeviceFeatures2Impl(
     // Don't provide AntiLag if we're exposing reflex - VK_NV_low_latency2 uses
     // VkSurfaceCapabilities2KHR to determine if a surface is capable of reflex
     // instead of AMD's physical device switch found here.
-    if (context->instance.layer.should_expose_reflex) {
+    if (context->instance.layer.should_expose_reflex ||
+        layer_context.should_anywhere) {
         return;
     }
 
@@ -779,7 +814,8 @@ static VKAPI_ATTR VkResult VKAPI_CALL GetPhysicalDeviceSurfaceCapabilities2KHR(
     }
 
     // Don't do this unless we're spoofing nvidia.
-    if (!context->instance.layer.should_expose_reflex) {
+    if (!context->instance.layer.should_expose_reflex ||
+        layer_context.should_anywhere) {
         return VK_SUCCESS;
     }
 
@@ -828,6 +864,11 @@ CreateSwapchainKHR(VkDevice device, const VkSwapchainCreateInfoKHR* pCreateInfo,
         return result;
     }
 
+    if (layer_context.should_debug) {
+        std::fprintf(stderr, "[LowLatency] CreateSwapchainKHR: swapchain=%p\n",
+                     static_cast<void*>(*pSwapchain));
+    }
+
     if (context->strategy) {
         assert(pCreateInfo);
         context->strategy->notify_create_swapchain(*pSwapchain, *pCreateInfo);
@@ -839,6 +880,10 @@ CreateSwapchainKHR(VkDevice device, const VkSwapchainCreateInfoKHR* pCreateInfo,
 static VKAPI_ATTR void VKAPI_CALL
 DestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain,
                     const VkAllocationCallbacks* pAllocator) noexcept {
+    if (layer_context.should_debug) {
+        std::fprintf(stderr, "[LowLatency] DestroySwapchainKHR: swapchain=%p\n",
+                     static_cast<void*>(swapchain));
+    }
     const auto context = layer_context.get_context(device);
     if (context->strategy) {
         context->strategy->notify_destroy_swapchain(swapchain);
@@ -853,6 +898,10 @@ AcquireNextImageKHR(VkDevice device, VkSwapchainKHR swapchain,
     const auto context = layer_context.get_context(device);
     const auto result = context->vtable.AcquireNextImageKHR(
         device, swapchain, timeout, semaphore, fence, pImageIndex);
+    if (layer_context.should_debug) {
+        std::fprintf(stderr, "[LowLatency] AcquireNextImageKHR: swapchain=%p result=%d\n",
+                     static_cast<void*>(swapchain), static_cast<int>(result));
+    }
     if (context->strategy) {
         context->strategy->notify_acquire(swapchain, DeviceClock::now());
     }

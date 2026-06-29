@@ -51,6 +51,12 @@ class LayerContext final : public Context {
     // VK_NV_low_latency2 should be provided instead of VK_AMD_anti_lag.
     static constexpr auto REFLEX_ENV = "LOW_LATENCY_LAYER_REFLEX";
 
+    // ANYWHERE mode: pace any game without requiring it to call a
+    // low-latency extension. The layer intercepts QueuePresentKHR to
+    // detect frame boundaries and paces using the existing pacer
+    // infrastructure. When active, no vendor extension is exposed.
+    static constexpr auto ANYWHERE_ENV = "LOW_LATENCY_LAYER_ANYWHERE";
+
     // The card's vendor, id, and device name will be modified to appear as a
     // NVIDIA card.
     static constexpr auto SPOOF_NVIDIA_ENV = "LOW_LATENCY_LAYER_SPOOF_NVIDIA";
@@ -61,6 +67,10 @@ class LayerContext final : public Context {
     // of the next frame, not the present of a finished one.
     static constexpr auto FPS_LIMIT_ENV = "LOW_LATENCY_LAYER_FPS_LIMIT";
 
+    // When set to "1", the layer prints debug messages to stderr for every
+    // intercepted Vulkan call and ANYWHERE mode pacing activity.
+    static constexpr auto DEBUG_ENV = "LOW_LATENCY_LAYER_DEBUG";
+
   public:
     // Constants for spoofing.
     static constexpr auto NVIDIA_VENDOR_ID = 0x10DE;
@@ -69,7 +79,9 @@ class LayerContext final : public Context {
 
   public:
     const bool should_expose_reflex{};
+    const bool should_anywhere{};
     const bool should_spoof_nvidia{};
+    const bool should_debug{};
     const double fps_limit{}; // 0 = disabled; >0 = max frames per second
 
     std::shared_mutex mutex{};
